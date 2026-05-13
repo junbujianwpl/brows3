@@ -316,30 +316,23 @@ impl ProfileManager {
                 *secret_access_key = old_secret.clone();
             }
             (
-                CredentialType::Manual {
-                    secret_access_key: old_secret,
-                    ..
-                },
-                CredentialType::CustomEndpoint {
-                    secret_access_key, ..
-                },
+                CredentialType::Manual { secret_access_key: old_secret, .. },
+                CredentialType::CustomEndpoint { secret_access_key, .. },
             ) if secret_access_key.is_empty() && !old_secret.is_empty() => {
                 *secret_access_key = old_secret.clone();
             }
             (
-                CredentialType::CustomEndpoint {
-                    secret_access_key: old_secret,
-                    ..
-                },
-                CredentialType::Manual {
-                    secret_access_key, ..
-                },
+                CredentialType::CustomEndpoint { secret_access_key: old_secret, .. },
+                CredentialType::Manual { secret_access_key, .. },
             ) if secret_access_key.is_empty() && !old_secret.is_empty() => {
                 *secret_access_key = old_secret.clone();
             }
             _ => {}
         }
 
+        // Only drop keychain material when leaving manual / S3-compatible auth. Previously we
+        // always deleted here and then re-stored; if `store_secret` skipped (empty secret payload),
+        // the secret was wiped while profiles.json still pointed at this profile — breaking S3.
         let existing_used_keychain = matches!(
             existing_profile.credential_type,
             CredentialType::Manual { .. } | CredentialType::CustomEndpoint { .. }
@@ -348,7 +341,6 @@ impl ProfileManager {
             profile.credential_type,
             CredentialType::Manual { .. } | CredentialType::CustomEndpoint { .. }
         );
-
         if existing_used_keychain && !new_uses_keychain {
             self.remove_secret(&existing_profile);
         }
