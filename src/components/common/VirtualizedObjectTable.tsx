@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { memo, useMemo, useCallback } from 'react';
 import type { CSSProperties, HTMLAttributes } from 'react';
@@ -145,6 +145,9 @@ interface Props {
   onEdit?: (key: string) => void;
   onCopyPath?: (key: string) => void;
   onEndReached?: () => void;
+  /** True while remaining S3 list pages are being fetched in the background (full list for local search). */
+  isPrefetching?: boolean;
+  hasMore?: boolean;
 }
 
 type ScrollerProps = HTMLAttributes<HTMLDivElement> & { style?: CSSProperties };
@@ -330,6 +333,8 @@ export const VirtualizedObjectTable = memo(function VirtualizedObjectTable({
   onPreview,
   onEdit,
   onEndReached,
+  isPrefetching = false,
+  hasMore = false,
 }: Props) {
   // Build rows - highly optimized
   const rows = useMemo<RowData[]>(() => {
@@ -484,7 +489,9 @@ export const VirtualizedObjectTable = memo(function VirtualizedObjectTable({
             style={{ height: '100%' }}
             overscan={20}
             increaseViewportBy={{ top: 100, bottom: 100 }}
-            endReached={onEndReached}
+            endReached={
+              onEndReached && hasMore && !isPrefetching ? onEndReached : undefined
+            }
           />
         )}
       </Box>
@@ -522,9 +529,17 @@ export const VirtualizedObjectTable = memo(function VirtualizedObjectTable({
         </Stack>
 
         <Stack direction="row" spacing={2} alignItems="center">
-          {onEndReached && (
+          {isPrefetching && (
+            <Stack direction="row" spacing={1} alignItems="center">
+              <CircularProgress size={12} thickness={6} />
+              <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem' }}>
+                Loading full listing for search…
+              </Typography>
+            </Stack>
+          )}
+          {!isPrefetching && hasMore && onEndReached && (
             <Typography variant="caption" color="text.secondary" sx={{ fontStyle: 'italic', fontSize: '0.7rem' }}>
-              Scroll for more
+              Scroll to load more
             </Typography>
           )}
         </Stack>

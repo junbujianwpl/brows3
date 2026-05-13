@@ -1,8 +1,18 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+﻿import { useState, useEffect, useCallback, useRef } from 'react';
 import { ListObjectsResult, objectApi, subscribeCacheInvalidation } from '@/lib/tauri';
 import { useProfileStore } from '@/store/profileStore';
 import { useAppStore } from '@/store/appStore';
 import { useSettingsStore } from '@/store/settingsStore';
+
+function mergeListResults(prev: ListObjectsResult, next: ListObjectsResult): ListObjectsResult {
+  const uniquePrefixes = Array.from(new Set([...prev.common_prefixes, ...next.common_prefixes]));
+  return {
+    ...next,
+    objects: [...prev.objects, ...next.objects],
+    common_prefixes: uniquePrefixes,
+    prefix: prev.prefix,
+  };
+}
 
 interface BucketStats {
   isCached: boolean;
@@ -17,6 +27,7 @@ interface UseObjectsResult {
   loadMore: () => Promise<void>;
   isLoadingMore: boolean;
   hasMore: boolean;
+  isPrefetching: boolean;
 }
 
 export function useObjects(bucketName: string, bucketRegion?: string, prefix = ''): UseObjectsResult {
@@ -29,6 +40,7 @@ export function useObjects(bucketName: string, bucketRegion?: string, prefix = '
   
   const { activeProfileId } = useProfileStore();
   const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [isPrefetching, setIsPrefetching] = useState(false);
   const [continuationToken, setContinuationToken] = useState<string | null>(null);
   const [hasMore, setHasMore] = useState(false);
   
@@ -37,6 +49,15 @@ export function useObjects(bucketName: string, bucketRegion?: string, prefix = '
   const viewKeyRef = useRef<string>('');
   const loadedViewKeyRef = useRef<string>('');
   const fetchInProgress = useRef(false);
+  const continuationTokenRef = useRef<string | null>(null);
+  const pageInFlightRef = useRef(false);
+  /** Non-zero while an automatic prefetch chain for the matching id may still be running. */
+  const prefetchOwnerIdRef = useRef(0);
+  const prefetchSerialRef = useRef(0);
+
+  useEffect(() => {
+    continuationTokenRef.current = continuationToken;
+  }, [continuationToken]);
 
   // Core fetch function
   const fetchItems = useCallback(async (bypassCache = false) => {
@@ -57,8 +78,12 @@ export function useObjects(bucketName: string, bucketRegion?: string, prefix = '
 
     if (bypassCache) {
       setContinuationToken(null);
+      continuationTokenRef.current = null;
       setHasMore(false);
     }
+
+    let prefetchToken: string | null = null;
+    let listResult: ListObjectsResult | null = null;
 
     try {
       const result = await objectApi.listObjects(bucketName, activeRegion, prefix, '/', undefined, bypassCache);
@@ -66,24 +91,29 @@ export function useObjects(bucketName: string, bucketRegion?: string, prefix = '
       // RACING CONDITION FIX:
       // If a new fetch started while we were awaiting, ignore this result.
       if (currentFetchId !== fetchIdRef.current || currentViewKey !== viewKeyRef.current) {
-          return null;
-      }
+        listResult = null;
+      } else {
+        setData(result);
+        prefetchToken = result.next_continuation_token || null;
+        setContinuationToken(prefetchToken);
+        setHasMore(!!prefetchToken);
+        loadedViewKeyRef.current = currentViewKey;
 
-      setData(result);
-      setContinuationToken(result.next_continuation_token || null);
-      setHasMore(!!result.next_continuation_token);
-      loadedViewKeyRef.current = currentViewKey;
-
-      if (result.bucket_region) {
+        if (result.bucket_region) {
           useAppStore.getState().setDiscoveredRegion(bucketName, result.bucket_region);
-      }
-      
-      return result;
-    } catch (err) {
-      if (currentFetchId !== fetchIdRef.current || currentViewKey !== viewKeyRef.current) return null;
+        }
 
-      if (process.env.NODE_ENV === 'development') {
-        console.warn(`Failed to load bucket "${bucketName}" with prefix "${prefix}":`, err);
+        listResult = result;
+      }
+    } catch (err: any) {
+      if (currentFetchId !== fetchIdRef.current || currentViewKey !== viewKeyRef.current) {
+        listResult = null;
+      } else {
+        if (process.env.NODE_ENV === 'development') {
+          console.warn(`Failed to load bucket "${bucketName}" with prefix "${prefix}":`, err);
+        }
+        setError(err.message || String(err));
+        listResult = null;
       }
       setError(err instanceof Error ? err.message : String(err));
       return null;
@@ -93,6 +123,52 @@ export function useObjects(bucketName: string, bucketRegion?: string, prefix = '
         fetchInProgress.current = false;
       }
     }
+
+    if (
+      prefetchToken &&
+      currentFetchId === fetchIdRef.current &&
+      currentViewKey === viewKeyRef.current
+    ) {
+      const ownerId = ++prefetchSerialRef.current;
+      prefetchOwnerIdRef.current = ownerId;
+      setIsPrefetching(true);
+      void (async () => {
+        let token: string | null = prefetchToken;
+        try {
+          while (token) {
+            if (fetchIdRef.current !== currentFetchId || viewKeyRef.current !== currentViewKey) {
+              break;
+            }
+            pageInFlightRef.current = true;
+            try {
+              const region = useAppStore.getState().discoveredRegions[bucketName] || bucketRegion;
+              const page = await objectApi.listObjects(bucketName, region, prefix, '/', token, false);
+              if (fetchIdRef.current !== currentFetchId || viewKeyRef.current !== currentViewKey) {
+                break;
+              }
+              setData((prev) => (prev ? mergeListResults(prev, page) : page));
+              token = page.next_continuation_token || null;
+              setContinuationToken(token);
+              setHasMore(!!token);
+            } catch (e) {
+              if (process.env.NODE_ENV === 'development') {
+                console.warn('Prefetch page error:', e);
+              }
+              break;
+            } finally {
+              pageInFlightRef.current = false;
+            }
+          }
+        } finally {
+          if (prefetchOwnerIdRef.current === ownerId) {
+            prefetchOwnerIdRef.current = 0;
+            setIsPrefetching(false);
+          }
+        }
+      })();
+    }
+
+    return listResult;
   }, [bucketName, bucketRegion, prefix, activeProfileId]);
 
   useEffect(() => {
@@ -128,11 +204,16 @@ export function useObjects(bucketName: string, bucketRegion?: string, prefix = '
 
   useEffect(() => {
     return subscribeCacheInvalidation(() => {
+      fetchIdRef.current += 1;
+      prefetchSerialRef.current += 1;
+      prefetchOwnerIdRef.current = 0;
       loadedViewKeyRef.current = '';
       lastDataKeyRef.current = '';
       setData(null);
       setContinuationToken(null);
+      continuationTokenRef.current = null;
       setHasMore(false);
+      setIsPrefetching(false);
     });
   }, []);
 
@@ -159,36 +240,33 @@ export function useObjects(bucketName: string, bucketRegion?: string, prefix = '
   }, [bucketName, activeProfileId, fetchItems, autoRefreshOnFocus]);
 
   const loadMore = useCallback(async () => {
-    if (!bucketName || !activeProfileId || !continuationToken || isLoadingMore || fetchInProgress.current) return;
-    
+    if (!bucketName || !activeProfileId || fetchInProgress.current) return;
+    if (prefetchOwnerIdRef.current !== 0) return;
+    const requestToken = continuationTokenRef.current;
+    if (!requestToken || pageInFlightRef.current) return;
+
     const currentViewKey = `${activeProfileId}:${bucketName}:${prefix}`;
     const activeRegion = useAppStore.getState().discoveredRegions[bucketName] || bucketRegion;
     const currentFetchId = fetchIdRef.current;
-    const requestToken = continuationToken;
+
+    pageInFlightRef.current = true;
     setIsLoadingMore(true);
     try {
-       const result = await objectApi.listObjects(bucketName, activeRegion, prefix, '/', requestToken);
-       if (currentViewKey !== viewKeyRef.current || currentFetchId !== fetchIdRef.current) {
-         return;
-       }
-       setData(prev => {
-         if (!prev) return result;
-         const uniquePrefixes = Array.from(new Set([...prev.common_prefixes, ...result.common_prefixes]));
-         return {
-           ...result,
-           objects: [...prev.objects, ...result.objects],
-           common_prefixes: uniquePrefixes,
-           prefix: prev.prefix
-         };
-       });
-       setContinuationToken(result.next_continuation_token || null);
-       setHasMore(!!result.next_continuation_token);
+      const result = await objectApi.listObjects(bucketName, activeRegion, prefix, '/', requestToken);
+      if (currentViewKey !== viewKeyRef.current || currentFetchId !== fetchIdRef.current) {
+        return;
+      }
+      setData((prev) => (prev ? mergeListResults(prev, result) : result));
+      const nextTok = result.next_continuation_token || null;
+      setContinuationToken(nextTok);
+      setHasMore(!!nextTok);
     } catch (err) {
-       console.error('Load more error:', err);
+      console.error('Load more error:', err);
     } finally {
-       setIsLoadingMore(false);
+      pageInFlightRef.current = false;
+      setIsLoadingMore(false);
     }
-  }, [bucketName, bucketRegion, prefix, activeProfileId, continuationToken, isLoadingMore]);
+  }, [bucketName, bucketRegion, prefix, activeProfileId]);
 
   const refresh = useCallback(async () => {
     if (!bucketName || !activeProfileId) return;
@@ -196,5 +274,5 @@ export function useObjects(bucketName: string, bucketRegion?: string, prefix = '
     await fetchItems(true);
   }, [bucketName, activeProfileId, fetchItems]);
 
-  return { data, isLoading, error, stats, refresh, loadMore, hasMore, isLoadingMore };
+  return { data, isLoading, error, stats, refresh, loadMore, hasMore, isLoadingMore, isPrefetching };
 }

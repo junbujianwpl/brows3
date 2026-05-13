@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { Suspense, useState, useMemo, useEffect, useRef, useCallback, useDeferredValue } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
@@ -83,7 +83,7 @@ function BucketContent() {
   const bucketRegion = searchParams.get('region') || 'us-east-1';
   const prefix = searchParams.get('prefix') || '';
   
-  const { data, isLoading, error: initialError, refresh, loadMore } = useObjects(bucketName || '', bucketRegion, prefix);
+  const { data, isLoading, error: initialError, stats, refresh, loadMore, hasMore, isPrefetching } = useObjects(bucketName || '', bucketRegion, prefix);
   const addJob = useTransferStore(state => state.addJob);
   const activeProfileId = useProfileStore(state => state.activeProfileId);
   
@@ -1163,6 +1163,8 @@ function BucketContent() {
         sortField={sortField}
         sortDirection={sortDirection}
         isLoading={isLoading || isSearching}
+        isPrefetching={isPrefetching}
+        hasMore={hasMore}
         onNavigate={handleNavigate}
         onSelect={handleSelect}
         onEndReached={loadMore}
