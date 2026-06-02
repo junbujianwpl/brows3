@@ -148,6 +148,8 @@ interface Props {
   /** True while remaining S3 list pages are being fetched in the background (full list for local search). */
   isPrefetching?: boolean;
   hasMore?: boolean;
+  /** True when stale cached data is displayed while fresh data is being fetched in the background. */
+  isRevalidating?: boolean;
 }
 
 type ScrollerProps = HTMLAttributes<HTMLDivElement> & { style?: CSSProperties };
@@ -335,6 +337,7 @@ export const VirtualizedObjectTable = memo(function VirtualizedObjectTable({
   onEndReached,
   isPrefetching = false,
   hasMore = false,
+  isRevalidating = false,
 }: Props) {
   // Build rows - highly optimized
   const rows = useMemo<RowData[]>(() => {
@@ -529,6 +532,14 @@ export const VirtualizedObjectTable = memo(function VirtualizedObjectTable({
         </Stack>
 
         <Stack direction="row" spacing={2} alignItems="center">
+          {isRevalidating && (
+            <Stack direction="row" spacing={1} alignItems="center">
+              <CircularProgress size={12} thickness={6} color="info" />
+              <Typography variant="caption" color="info.main" sx={{ fontSize: '0.7rem', fontWeight: 600 }}>
+                Refreshing…
+              </Typography>
+            </Stack>
+          )}
           {isPrefetching && (
             <Stack direction="row" spacing={1} alignItems="center">
               <CircularProgress size={12} thickness={6} />

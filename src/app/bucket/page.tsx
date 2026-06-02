@@ -83,7 +83,7 @@ function BucketContent() {
   const bucketRegion = searchParams.get('region') || 'us-east-1';
   const prefix = searchParams.get('prefix') || '';
   
-  const { data, isLoading, error: initialError, stats, refresh, loadMore, hasMore, isPrefetching } = useObjects(bucketName || '', bucketRegion, prefix);
+  const { data, isLoading, error: initialError, stats, refresh, loadMore, hasMore, isPrefetching, isRevalidating } = useObjects(bucketName || '', bucketRegion, prefix);
   const addJob = useTransferStore(state => state.addJob);
   const activeProfileId = useProfileStore(state => state.activeProfileId);
   
@@ -1132,7 +1132,18 @@ function BucketContent() {
           </>
         )}
 
-        <Tooltip title="Refresh">
+        {stats.isLargeDirCached && (
+          <Tooltip title={isRevalidating ? "Updating from S3 in background…" : "Large directory — using cached data. Click refresh to update from S3."}>
+            <Chip 
+              label={isRevalidating ? "Refreshing…" : "Cached"} 
+              size="small" 
+              color={isRevalidating ? "warning" : "info"} 
+              variant="outlined"
+              sx={{ fontWeight: 600, fontSize: '0.7rem' }}
+            />
+          </Tooltip>
+        )}
+        <Tooltip title={stats.isLargeDirCached ? "Refresh from S3 (large directory cached)" : "Refresh"}>
             <IconButton 
               onClick={() => refresh()} 
               disabled={isLoading} 
@@ -1140,7 +1151,7 @@ function BucketContent() {
               sx={{ 
                 bgcolor: 'background.paper', 
                 border: '1px solid',
-                borderColor: 'divider',
+                borderColor: stats.isLargeDirCached ? 'info.main' : 'divider',
                 boxShadow: '0 2px 5px rgba(0,0,0,0.05)',
                 '&:hover': { bgcolor: 'action.hover' }
               }}
@@ -1164,6 +1175,7 @@ function BucketContent() {
         sortDirection={sortDirection}
         isLoading={isLoading || isSearching}
         isPrefetching={isPrefetching}
+        isRevalidating={isRevalidating}
         hasMore={hasMore}
         onNavigate={handleNavigate}
         onSelect={handleSelect}

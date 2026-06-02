@@ -35,6 +35,7 @@ import { useSettingsStore } from '@/store/settingsStore';
 import { useAppStore } from '@/store/appStore';
 import { useMonitorStore } from '@/store/monitorStore';
 import { invalidateBucketCache } from '@/hooks/useBuckets';
+import { clearLargeDirCache, getLargeDirCacheStats } from '@/hooks/useObjects';
 import { toast } from '@/store/toastStore';
 import { copyToClipboard, invalidateCache, isTauri, logApi, type LogFileInfo } from '@/lib/tauri';
 
@@ -82,6 +83,7 @@ export default function SettingsPage() {
 
   const handleClearCache = () => {
     invalidateBucketCache();
+    clearLargeDirCache();
     clearDiscoveredRegions();
     invalidateCache();
     toast.success('Caches cleared', 'Bucket lists, discovered regions, and object views were reset.');
@@ -296,7 +298,14 @@ export default function SettingsPage() {
           <ListItem>
             <ListItemText 
               primary="Cached Bucket and Object Data" 
-              secondary="Clear cached bucket lists, discovered regions, and open object views to force fresh fetches from S3" 
+              secondary={(() => {
+                const stats = getLargeDirCacheStats();
+                if (stats.entryCount === 0) {
+                  return 'Clear cached bucket lists, discovered regions, and open object views to force fresh fetches from S3';
+                }
+                const ageMin = stats.oldestAge !== null ? Math.round(stats.oldestAge / 60000) : 0;
+                return `${stats.entryCount} large directories cached (${stats.totalItems.toLocaleString()} items total, oldest ${ageMin}min ago). Expires after 30min.`;
+              })()}
             />
             <ListItemSecondaryAction>
               <Button 
