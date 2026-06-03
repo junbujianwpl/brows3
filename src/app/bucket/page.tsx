@@ -34,6 +34,9 @@ import {
   CloudUpload as CloudUploadIcon,
   CreateNewFolder as CreateNewFolderIcon,
   Download as DownloadIcon,
+  CopyAll as CopyIcon,
+  ContentCut as CutIcon,
+  ContentPaste as PasteIcon,
   Delete as DeleteIcon,
   DriveFileRenameOutline as RenameIcon,
   Info as InfoIcon,
@@ -1066,6 +1069,42 @@ function BucketContent() {
                 onDelete={() => setSelectedKeys(new Set())}
                 sx={{ fontWeight: 700, borderRadius: 1 }}
               />
+              <Tooltip title="Copy (Ctrl+C)">
+                <Button
+                  variant="outlined"
+                  size="small"
+                  onClick={handleCopy}
+                  startIcon={<CopyIcon />}
+                  sx={{ fontWeight: 700 }}
+                >
+                  Copy
+                </Button>
+              </Tooltip>
+              <Tooltip title="Cut (Ctrl+X)">
+                <Button
+                  variant="outlined"
+                  size="small"
+                  onClick={handleCut}
+                  startIcon={<CutIcon />}
+                  sx={{ fontWeight: 700 }}
+                >
+                  Cut
+                </Button>
+              </Tooltip>
+              {clipboardItems.length > 0 && (
+                <Tooltip title={`Paste ${clipboardItems.length} item(s) here (Ctrl+V)`}>
+                  <Button
+                    variant="outlined"
+                    size="small"
+                    onClick={handlePaste}
+                    startIcon={<PasteIcon />}
+                    color={clipboardMode === 'move' ? 'warning' : 'primary'}
+                    sx={{ fontWeight: 700 }}
+                  >
+                    Paste{clipboardMode === 'move' ? ' (Move)' : ''}
+                  </Button>
+                </Tooltip>
+              )}
               <Button 
                 variant="outlined"
                 size="small"
@@ -1091,6 +1130,20 @@ function BucketContent() {
           </Fade>
         ) : (
           <>
+        {clipboardItems.length > 0 && (
+          <Tooltip title={`Paste ${clipboardItems.length} item(s) here (Ctrl+V)`}>
+            <Button
+              variant="outlined"
+              size="small"
+              onClick={handlePaste}
+              startIcon={<PasteIcon />}
+              color={clipboardMode === 'move' ? 'warning' : 'primary'}
+              sx={{ fontWeight: 700 }}
+            >
+              Paste {clipboardItems.length}{clipboardMode === 'move' ? ' (Move)' : ''}
+            </Button>
+          </Tooltip>
+        )}
         <Button 
           variant="outlined" 
           startIcon={<CreateNewFolderIcon />} 
@@ -1373,6 +1426,31 @@ function BucketContent() {
           <ListItemIcon><LinkIcon fontSize="small" /></ListItemIcon>
           Copy S3 URI
         </MenuItem>
+        <Divider />
+        <MenuItem onClick={() => {
+          if (selectedObject) {
+            copy([{ bucket: bucketName || '', region: bucketRegion, key: selectedObject.key, isFolder: selectedObject.isFolder }]);
+          }
+          handleMenuClose();
+        }}>
+          <ListItemIcon><CopyIcon fontSize="small" /></ListItemIcon>
+          Copy to Clipboard
+        </MenuItem>
+        <MenuItem onClick={() => {
+          if (selectedObject) {
+            cut([{ bucket: bucketName || '', region: bucketRegion, key: selectedObject.key, isFolder: selectedObject.isFolder }]);
+          }
+          handleMenuClose();
+        }}>
+          <ListItemIcon><CutIcon fontSize="small" /></ListItemIcon>
+          Cut to Clipboard
+        </MenuItem>
+        {clipboardItems.length > 0 && (
+          <MenuItem onClick={() => { handleMenuClose(); handlePaste(); }}>
+            <ListItemIcon><PasteIcon fontSize="small" /></ListItemIcon>
+            Paste Here ({clipboardItems.length})
+          </MenuItem>
+        )}
         <Divider />
         <MenuItem onClick={handleRenamePrompt}>
           <ListItemIcon><RenameIcon fontSize="small" /></ListItemIcon>

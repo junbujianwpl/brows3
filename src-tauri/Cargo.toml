@@ -69,3 +69,9 @@ codegen-units = 1
 lto = true
 opt-level = "s"
 strip = true
+
+[profile.fast-release]
+inherits = "release"
+lto = "thin"
+codegen-units = 16
+opt-level = 2
