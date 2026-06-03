@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- SignPath artifact configuration for standalone exe (NSIS installer) -->
+<artifact-configuration xmlns="http://signpath.io/artifact-configuration/v1">
+  <pe-file-set>
+    <include path="**/*.exe" />
+  </pe-file-set>
+</artifact-configuration>

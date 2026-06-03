@@ -197,7 +197,31 @@ jobs:
           touch "$PORTABLE_DIR/brows3.portable"
           7z a "src-tauri/target/release/bundle/portable/Brows3_${RELEASE_VERSION}_x64-portable.zip" "$PORTABLE_DIR"/*
 
-      - name: Upload release assets
+      - name: Collect Windows artifacts for signing
+        if: startsWith(matrix.platform, 'windows-')
+        id: collect_win
+        shell: bash
+        run: |
+          mkdir -p windows-unsigned
+          find src-tauri/target -type f \
+            \( -path '*/bundle/nsis/*' -name '*-setup.exe' \) \
+            -exec cp {} windows-unsigned/ \;
+          find src-tauri/target -type f \
+            \( -path '*/bundle/msi/*' -name '*.msi' \) \
+            -exec cp {} windows-unsigned/ \;
+          echo "Collected for signing:"
+          ls -la windows-unsigned/
+
+      - name: Upload Windows unsigned artifacts
+        if: startsWith(matrix.platform, 'windows-')
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-unsigned
+          path: windows-unsigned/
+          retention-days: 1
+
+      - name: Upload release assets (non-Windows)
+        if: "!startsWith(matrix.platform, 'windows-')"
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -208,18 +232,12 @@ jobs:
             FILES+=("$file")
           done < <(find src-tauri/target -type f \
             \( \
-              -path '*/bundle/msi/*' -o \
-              -path '*/bundle/nsis/*' -o \
-              -path '*/bundle/portable/*' -o \
               -path '*/bundle/appimage/*' -o \
               -path '*/bundle/deb/*' -o \
               -path '*/bundle/dmg/*' -o \
               -path '*/bundle/macos/*' \
             \) \
             \( \
-              -name '*.msi' -o -name '*.msi.sig' -o -name '*.msi.zip' -o -name '*.msi.zip.sig' -o \
-              -name '*-setup.exe' -o -name '*-setup.exe.sig' -o -name '*.nsis.zip' -o -name '*.nsis.zip.sig' -o \
-              -name '*-portable.zip' -o \
               -name '*.AppImage' -o -name '*.AppImage.sig' -o \
               -name '*.deb' -o -name '*.deb.sig' -o \
               -name '*.dmg' -o -name '*.dmg.sig' -o \
@@ -234,11 +252,123 @@ jobs:
           printf 'Uploading %s\n' "${FILES[@]}"
           gh release upload "$TAG_NAME" "${FILES[@]}" --clobber
 
-  update-manifest:
-    if: github.actor != 'github-actions[bot]'
+      - name: Upload Windows release assets (sig files + portable)
+        if: startsWith(matrix.platform, 'windows-')
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG_NAME: ${{ needs.prepare-release.outputs.tag_name }}
+        run: |
+          FILES=()
+          while IFS= read -r -d '' file; do
+            FILES+=("$file")
+          done < <(find src-tauri/target -type f \
+            \( \
+              -path '*/bundle/msi/*' -o \
+              -path '*/bundle/nsis/*' -o \
+              -path '*/bundle/portable/*' \
+            \) \
+            \( \
+              -name '*.msi.sig' -o -name '*.msi.zip' -o -name '*.msi.zip.sig' -o \
+              -name '*-setup.exe.sig' -o -name '*.nsis.zip' -o -name '*.nsis.zip.sig' -o \
+              -name '*-portable.zip' \
+            \) -print0)
+
+          if [ "${#FILES[@]}" -gt 0 ]; then
+            printf 'Uploading %s\n' "${FILES[@]}"
+            gh release upload "$TAG_NAME" "${FILES[@]}" --clobber
+          fi
+
+  sign-windows:
+    if: github.actor != 'github-actions[bot]' && secrets.SIGNPATH_API_TOKEN != ''
     needs:
       - prepare-release
       - publish-tauri
+    permissions:
+      contents: write
+      actions: read
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Download unsigned Windows artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: windows-unsigned
+          path: windows-unsigned/
+
+      - name: Sign with SignPath
+        uses: signpath/github-action-submit-signing-request@v1
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ secrets.SIGNPATH_ORG_ID }}
+          project-slug: brows3
+          signing-policy-slug: release-signing
+          artifact-configuration-slug: windows
+          github-artifact-id: windows-unsigned
+          wait-for-completion: true
+          output-artifact-directory: windows-signed/
+
+      - name: Upload signed Windows artifacts to release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG_NAME: ${{ needs.prepare-release.outputs.tag_name }}
+        run: |
+          echo "Signed artifacts:"
+          ls -la windows-signed/
+          FILES=()
+          for f in windows-signed/*; do
+            [ -f "$f" ] && FILES+=("$f")
+          done
+          if [ "${#FILES[@]}" -gt 0 ]; then
+            printf 'Uploading signed: %s\n' "${FILES[@]}"
+            gh release upload "$TAG_NAME" "${FILES[@]}" --clobber
+          else
+            echo "::warning::No signed artifacts found, uploading unsigned as fallback"
+            for f in windows-unsigned/*; do
+              [ -f "$f" ] && FILES+=("$f")
+            done
+            gh release upload "$TAG_NAME" "${FILES[@]}" --clobber
+          fi
+
+  upload-unsigned-windows:
+    if: github.actor != 'github-actions[bot]' && secrets.SIGNPATH_API_TOKEN == ''
+    needs:
+      - prepare-release
+      - publish-tauri
+    permissions:
+      contents: write
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download unsigned Windows artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: windows-unsigned
+          path: windows-unsigned/
+
+      - name: Upload unsigned Windows artifacts to release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG_NAME: ${{ needs.prepare-release.outputs.tag_name }}
+        run: |
+          FILES=()
+          for f in windows-unsigned/*; do
+            [ -f "$f" ] && FILES+=("$f")
+          done
+          if [ "${#FILES[@]}" -gt 0 ]; then
+            printf 'Uploading unsigned: %s\n' "${FILES[@]}"
+            gh release upload "$TAG_NAME" "${FILES[@]}" --clobber
+          fi
+
+  update-manifest:
+    if: always() && github.actor != 'github-actions[bot]' && needs.publish-tauri.result == 'success'
+    needs:
+      - prepare-release
+      - publish-tauri
+      - sign-windows
+      - upload-unsigned-windows
     permissions:
       contents: write
     runs-on: ubuntu-latest

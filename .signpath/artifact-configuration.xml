@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- SignPath artifact configuration for Brows3 Windows builds -->
+<artifact-configuration xmlns="http://signpath.io/artifact-configuration/v1">
+  <msi-file>
+    <pe-file-set>
+      <include path="*.exe" />
+      <include path="*.dll" />
+    </pe-file-set>
+  </msi-file>
+</artifact-configuration>

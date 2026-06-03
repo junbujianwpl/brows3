@@ -236,3 +236,8 @@ npx tauri --version
 [修复nsis下载失败的问题](https://github.com/tauri-apps/tauri/issues/7338)
 
 上面还缺少一步，少插件的，还要再下载一个插件
+
+## TODO
+
+路径的默认打点折叠不太好
+另外路径太长了会自动换行导致多行显示出来了，UI上有点不美观，可以优化，现在是居中对齐了
