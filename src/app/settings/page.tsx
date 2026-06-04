@@ -46,7 +46,8 @@ export default function SettingsPage() {
   const { 
     defaultRegion, setDefaultRegion, 
     maxConcurrentTransfers, setMaxConcurrentTransfers,
-    autoRefreshOnFocus, setAutoRefreshOnFocus
+    autoRefreshOnFocus, setAutoRefreshOnFocus,
+    largeDirCacheTtlMinutes, setLargeDirCacheTtlMinutes
   } = useSettingsStore();
   
   const [version, setVersion] = useState<string>('...');
@@ -213,7 +214,7 @@ export default function SettingsPage() {
                />
             </Box>
           </ListItem>
-          <ListItem>
+          <ListItem divider>
             <ListItemText 
               primary="Auto-refresh on Focus" 
               secondary="Automatically refresh object list when returning to the app" 
@@ -225,6 +226,28 @@ export default function SettingsPage() {
                 onChange={(e) => {
                   setAutoRefreshOnFocus(e.target.checked);
                   toast.success('Behavior updated', `Auto-refresh ${e.target.checked ? 'enabled' : 'disabled'}`);
+                }}
+              />
+            </ListItemSecondaryAction>
+          </ListItem>
+          <ListItem>
+            <ListItemText 
+              primary="Large Directory Cache TTL" 
+              secondary={`Directories with 2000+ items are cached for ${largeDirCacheTtlMinutes} min before background revalidation`} 
+            />
+            <ListItemSecondaryAction>
+              <TextField
+                size="small"
+                type="number"
+                value={largeDirCacheTtlMinutes}
+                onChange={(e) => {
+                  const val = Math.max(1, Math.min(1440, parseInt(e.target.value) || 30));
+                  setLargeDirCacheTtlMinutes(val);
+                }}
+                inputProps={{ min: 1, max: 1440, step: 1 }}
+                sx={{ width: 90 }}
+                InputProps={{
+                  endAdornment: <Typography variant="caption" sx={{ ml: 0.5, whiteSpace: 'nowrap' }}>min</Typography>
                 }}
               />
             </ListItemSecondaryAction>
@@ -304,7 +327,7 @@ export default function SettingsPage() {
                   return 'Clear cached bucket lists, discovered regions, and open object views to force fresh fetches from S3';
                 }
                 const ageMin = stats.oldestAge !== null ? Math.round(stats.oldestAge / 60000) : 0;
-                return `${stats.entryCount} large directories cached (${stats.totalItems.toLocaleString()} items total, oldest ${ageMin}min ago). Expires after 30min.`;
+                return `${stats.entryCount} large directories cached (${stats.totalItems.toLocaleString()} items total, oldest ${ageMin}min ago). TTL: ${stats.ttlMinutes}min.`;
               })()}
             />
             <ListItemSecondaryAction>

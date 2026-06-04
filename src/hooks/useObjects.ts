@@ -5,17 +5,27 @@ import { useAppStore } from '@/store/appStore';
 import { useSettingsStore } from '@/store/settingsStore';
 
 function mergeListResults(prev: ListObjectsResult, next: ListObjectsResult): ListObjectsResult {
-  const uniquePrefixes = Array.from(new Set([...prev.common_prefixes, ...next.common_prefixes]));
+  // Dedupe prefixes: only add truly new ones (avoids Set allocation for large arrays)
+  let mergedPrefixes: string[];
+  if (next.common_prefixes.length === 0) {
+    mergedPrefixes = prev.common_prefixes;
+  } else if (prev.common_prefixes.length === 0) {
+    mergedPrefixes = next.common_prefixes;
+  } else {
+    const seen = new Set(prev.common_prefixes);
+    const added = next.common_prefixes.filter(p => !seen.has(p));
+    mergedPrefixes = added.length > 0 ? prev.common_prefixes.concat(added) : prev.common_prefixes;
+  }
+
   return {
     ...next,
-    objects: [...prev.objects, ...next.objects],
-    common_prefixes: uniquePrefixes,
+    objects: prev.objects.concat(next.objects),
+    common_prefixes: mergedPrefixes,
     prefix: prev.prefix,
   };
 }
 
 const LARGE_DIR_THRESHOLD = 2000;
-const LARGE_DIR_CACHE_TTL_MS = 30 * 60 * 1000; // 30 minutes
 
 interface LargeDirCacheEntry {
   data: ListObjectsResult;
@@ -24,8 +34,12 @@ interface LargeDirCacheEntry {
 
 const largeDirCache = new Map<string, LargeDirCacheEntry>();
 
+function getCacheTtlMs(): number {
+  return useSettingsStore.getState().largeDirCacheTtlMinutes * 60 * 1000;
+}
+
 function isEntryExpired(entry: LargeDirCacheEntry): boolean {
-  return Date.now() - entry.timestamp > LARGE_DIR_CACHE_TTL_MS;
+  return Date.now() - entry.timestamp > getCacheTtlMs();
 }
 
 export function clearLargeDirCache() {
@@ -36,7 +50,7 @@ export function removeLargeDirCacheEntry(viewKey: string) {
   largeDirCache.delete(viewKey);
 }
 
-export function getLargeDirCacheStats(): { entryCount: number; totalItems: number; oldestAge: number | null } {
+export function getLargeDirCacheStats(): { entryCount: number; totalItems: number; oldestAge: number | null; ttlMinutes: number } {
   let totalItems = 0;
   let oldestTimestamp: number | null = null;
   for (const entry of largeDirCache.values()) {
@@ -49,6 +63,7 @@ export function getLargeDirCacheStats(): { entryCount: number; totalItems: numbe
     entryCount: largeDirCache.size,
     totalItems,
     oldestAge: oldestTimestamp !== null ? Date.now() - oldestTimestamp : null,
+    ttlMinutes: useSettingsStore.getState().largeDirCacheTtlMinutes,
   };
 }
 
@@ -184,6 +199,8 @@ export function useObjects(bucketName: string, bucketRegion?: string, prefix = '
       void (async () => {
         let token: string | null = prefetchToken;
         let accumulated: ListObjectsResult | null = listResult;
+        let pagesSinceFlush = 0;
+        const FLUSH_INTERVAL = 5;
         try {
           while (token) {
             if (fetchIdRef.current !== currentFetchId || viewKeyRef.current !== currentViewKey) {
@@ -197,10 +214,16 @@ export function useObjects(bucketName: string, bucketRegion?: string, prefix = '
                 break;
               }
               accumulated = accumulated ? mergeListResults(accumulated, page) : page;
-              setData((prev) => (prev ? mergeListResults(prev, page) : page));
               token = page.next_continuation_token || null;
-              setContinuationToken(token);
-              setHasMore(!!token);
+              pagesSinceFlush++;
+
+              // Batch UI updates: flush every N pages or on last page
+              if (!token || pagesSinceFlush >= FLUSH_INTERVAL) {
+                setData(accumulated);
+                setContinuationToken(token);
+                setHasMore(!!token);
+                pagesSinceFlush = 0;
+              }
             } catch (e) {
               if (process.env.NODE_ENV === 'development') {
                 console.warn('Prefetch page error:', e);
@@ -253,7 +276,7 @@ export function useObjects(bucketName: string, bucketRegion?: string, prefix = '
     const cached = largeDirCache.get(currentKey);
     if (cached) {
       if (isEntryExpired(cached)) {
-        // SWR: serve stale data immediately, revalidate in background
+        // SWR: serve stale data immediately, revalidate fully in background
         setData(cached.data);
         setIsLoading(false);
         setContinuationToken(null);
@@ -263,11 +286,39 @@ export function useObjects(bucketName: string, bucketRegion?: string, prefix = '
         setIsRevalidating(true);
 
         const revalidate = async () => {
-          largeDirCache.delete(currentKey);
-          await fetchItems(true, true);
-          if (!cancelled) {
-            setIsRevalidating(false);
-            setStats({ isCached: true, isLargeDirCached: true });
+          const currentFetchId = ++fetchIdRef.current;
+          const activeRegion = useAppStore.getState().discoveredRegions[bucketName] || bucketRegion;
+          let accumulated: ListObjectsResult | null = null;
+          let token: string | undefined;
+
+          try {
+            do {
+              if (fetchIdRef.current !== currentFetchId || viewKeyRef.current !== currentKey) return;
+              const page = await objectApi.listObjects(bucketName, activeRegion, prefix, '/', token, true);
+              if (fetchIdRef.current !== currentFetchId || viewKeyRef.current !== currentKey) return;
+              accumulated = accumulated ? mergeListResults(accumulated, page) : page;
+              token = page.next_continuation_token || undefined;
+            } while (token);
+          } catch {
+            // Revalidation failed silently — stale data remains visible
+            if (!cancelled) setIsRevalidating(false);
+            return;
+          }
+
+          if (cancelled || fetchIdRef.current !== currentFetchId || viewKeyRef.current !== currentKey) return;
+
+          // Replace data atomically with the full result
+          setData(accumulated);
+          setContinuationToken(null);
+          setHasMore(false);
+          setIsRevalidating(false);
+          setStats({ isCached: true, isLargeDirCached: true });
+
+          // Update cache with fresh data
+          if (accumulated && getTotalItemCount(accumulated) >= LARGE_DIR_THRESHOLD) {
+            largeDirCache.set(currentKey, { data: accumulated, timestamp: Date.now() });
+          } else {
+            largeDirCache.delete(currentKey);
           }
         };
         revalidate();

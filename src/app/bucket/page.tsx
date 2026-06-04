@@ -981,13 +981,13 @@ function BucketContent() {
   return (
     <Box sx={{ p: 1, mt: 1, height: '100%', display: 'flex', flexDirection: 'column' }}>
       {/* Header & Breadcrumbs */}
-      <Box sx={{ mb: 2, display: 'flex', alignItems: 'center', gap: 2 }}>
-        <IconButton onClick={handleBack} size="small">
+      <Box sx={{ mb: 2, display: 'flex', alignItems: 'flex-start', gap: 2 }}>
+        <IconButton onClick={handleBack} size="small" sx={{ mt: '2px' }}>
           <ArrowBackIcon />
         </IconButton>
         
-        <Box sx={{ flex: 1, overflow: 'hidden' }}>
-          <Breadcrumbs maxItems={5} itemsBeforeCollapse={2}>
+        <Box sx={{ flex: 1, minWidth: 0 }}>
+          <Breadcrumbs maxItems={100}>
             
             <Link
               component="button" 

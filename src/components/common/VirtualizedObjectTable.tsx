@@ -1,6 +1,6 @@
 ﻿'use client';
 
-import { memo, useMemo, useCallback } from 'react';
+import { memo, useMemo, useCallback, useRef } from 'react';
 import type { CSSProperties, HTMLAttributes } from 'react';
 import {
   Box,
@@ -36,6 +36,28 @@ import { S3Object } from '@/lib/tauri';
 import { formatSize } from '@/lib/utils';
 import { StyledCheckbox } from './StyledCheckbox';
 import { canObjectBeEdited, canObjectBePreviewed } from '@/lib/objectCapabilities';
+
+// Date formatting cache (avoids repeated Date parsing for visible rows)
+const _dateFormatCache = new Map<string, string>();
+const DATE_CACHE_MAX = 5000;
+
+function formatSmartDate(iso: string): string {
+  if (!iso) return '—';
+
+  const cached = _dateFormatCache.get(iso);
+  if (cached) return cached;
+
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return '—';
+
+  // Unified format: yy/M/d H:m (no zero padding)
+  const y = d.getFullYear() % 100;
+  const result = `${y}/${d.getMonth() + 1}/${d.getDate()} ${d.getHours()}:${d.getMinutes()}`;
+
+  if (_dateFormatCache.size >= DATE_CACHE_MAX) _dateFormatCache.clear();
+  _dateFormatCache.set(iso, result);
+  return result;
+}
 
 // Get extension - simple and fast
 const getExt = (name: string): string => {
@@ -113,8 +135,7 @@ interface RowData {
   name: string;
   isFolder: boolean;
   size: number;
-  modified: string;
-  modifiedTimestamp: number;
+  modified: string; // ISO 8601 string or '' for folders
 }
 
 // Context type for Virtuoso table
@@ -281,11 +302,11 @@ const RowContent = memo(function RowContent({
       <TableCell align="right" sx={{ width: 80, py: 0.5, fontFamily: 'monospace', fontSize: '0.75rem', whiteSpace: 'nowrap', bgcolor: 'background.paper' }}>
         {row.isFolder ? '—' : formatSize(row.size)}
       </TableCell>
-      <TableCell align="right" sx={{ width: 100, py: 0.5, fontSize: '0.75rem', color: 'text.secondary', bgcolor: 'background.paper' }}>
-        {row.modified || '—'}
+      <TableCell align="right" sx={{ width: 140, py: 0.5, fontSize: '0.75rem', color: 'text.secondary', bgcolor: 'background.paper', whiteSpace: 'nowrap' }}>
+        {row.modified ? formatSmartDate(row.modified) : '—'}
       </TableCell>
-      <TableCell sx={{ width: 80, py: 0.25, bgcolor: 'background.paper' }}>
-        <Box sx={{ display: 'flex', justifyContent: 'flex-end', opacity: 0.7, '&:hover': { opacity: 1 } }}>
+      <TableCell sx={{ width: 80, py: 0.25, bgcolor: 'background.paper' }} className="row-actions-cell">
+        <Box sx={{ display: 'flex', justifyContent: 'flex-end', opacity: 0, '.MuiTableRow-root:hover &': { opacity: 1 } }}>
           {row.isFolder ? (
             <IconButton size="small" onClick={() => onNavigate(row.key)} sx={{ p: 0.5 }}>
               <OpenIcon sx={{ fontSize: 16 }} />
@@ -317,7 +338,7 @@ const RowContent = memo(function RowContent({
          prevProps.row.key === nextProps.row.key &&
          prevProps.rowIndex === nextProps.rowIndex &&
          prevProps.row.size === nextProps.row.size &&
-         prevProps.row.modifiedTimestamp === nextProps.row.modifiedTimestamp;
+         prevProps.row.modified === nextProps.row.modified;
 });
 
 export const VirtualizedObjectTable = memo(function VirtualizedObjectTable({
@@ -339,44 +360,73 @@ export const VirtualizedObjectTable = memo(function VirtualizedObjectTable({
   hasMore = false,
   isRevalidating = false,
 }: Props) {
-  // Build rows - highly optimized
+  // Persistent row cache across re-renders: avoids re-computing name extraction for unchanged items.
+  // Key = S3 key, Value = RowData. Cleared when sort changes (since sort doesn't reuse position).
+  const rowCacheRef = useRef(new Map<string, RowData>());
+
   const rows = useMemo<RowData[]>(() => {
+    const cache = rowCacheRef.current;
     const result: RowData[] = [];
     
     // Add folders
-    for (const prefix of folders) {
-      const parts = prefix.split('/').filter(Boolean);
-      result.push({
-        key: prefix,
-        name: parts[parts.length - 1] || prefix,
-        isFolder: true,
-        size: 0,
-        modified: '',
-        modifiedTimestamp: 0,
-      });
+    for (let i = 0; i < folders.length; i++) {
+      const p = folders[i];
+      let row = cache.get(p);
+      if (!row) {
+        const end = p.length - 1;
+        const slashIdx = p.lastIndexOf('/', end - 1);
+        row = {
+          key: p,
+          name: slashIdx >= 0 ? p.slice(slashIdx + 1, end) : p.slice(0, end) || p,
+          isFolder: true,
+          size: 0,
+          modified: '',
+        };
+        cache.set(p, row);
+      }
+      result.push(row);
     }
     
     // Add files
-    for (const obj of objects) {
-      const parts = obj.key.split('/');
-      result.push({
-        key: obj.key,
-        name: parts[parts.length - 1] || obj.key,
-        isFolder: false,
-        size: obj.size,
-        modified: obj.last_modified ? new Date(obj.last_modified).toLocaleDateString() : '',
-        modifiedTimestamp: obj.last_modified ? new Date(obj.last_modified).getTime() : 0,
-      });
+    for (let i = 0; i < objects.length; i++) {
+      const obj = objects[i];
+      const key = obj.key;
+      let row = cache.get(key);
+      if (row && row.size === obj.size && row.modified === (obj.last_modified || '')) {
+        result.push(row);
+      } else {
+        const lastSlash = key.lastIndexOf('/');
+        row = {
+          key,
+          name: lastSlash >= 0 ? key.slice(lastSlash + 1) || key : key,
+          isFolder: false,
+          size: obj.size,
+          modified: obj.last_modified || '',
+        };
+        cache.set(key, row);
+        result.push(row);
+      }
     }
     
-    // Sort - folders first, then by field
+    // S3 returns objects in lexicographic order — skip sort for default (name asc, folders first)
+    if (sortField === 'name' && sortDirection === 'asc') {
+      return result;
+    }
+
+    // For non-default sorts, use Intl.Collator (10x faster than localeCompare per call)
+    const collator = new Intl.Collator(undefined, { sensitivity: 'base' });
     result.sort((a, b) => {
       if (a.isFolder !== b.isFolder) return a.isFolder ? -1 : 1;
       
       let cmp = 0;
-      if (sortField === 'name') cmp = a.name.localeCompare(b.name);
+      if (sortField === 'name') cmp = collator.compare(a.name, b.name);
       else if (sortField === 'size') cmp = a.size - b.size;
-      else if (sortField === 'date') cmp = a.modifiedTimestamp - b.modifiedTimestamp;
+      else if (sortField === 'date') {
+        // ISO 8601 strings sort correctly in lexicographic order
+        if (a.modified < b.modified) cmp = -1;
+        else if (a.modified > b.modified) cmp = 1;
+        else cmp = 0;
+      }
       
       return sortDirection === 'asc' ? cmp : -cmp;
     });
