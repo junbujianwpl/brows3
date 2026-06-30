@@ -11,7 +11,7 @@ Navigating recently loaded buckets and prefixes feels close to browsing a local 
 
 **Website:** <a href="https://www.brows3.app/" target="_blank">brows3.app</a>
 
-Brows3 is built for people searching for a fast **S3 browser**, **AWS S3 client**, **S3 bucket explorer**, **S3 file manager**, or **S3-compatible storage browser** for providers like **MinIO**, **Cloudflare R2**, **Wasabi**, and **DigitalOcean Spaces**.
+Brows3 is built for people searching for a fast **S3 browser**, **AWS S3 client**, **S3 bucket explorer**, **S3 file manager**, or **S3-compatible storage browser** for providers like **MinIO**, **Cloudflare R2**, **Wasabi**, **STACKIT Object Storage**, and **DigitalOcean Spaces**.
 
 ## Screenshots
 
@@ -30,7 +30,7 @@ Brows3 is a strong fit if you need:
 - a desktop S3 browser for large buckets
 - a faster S3 explorer than generic cloud-storage tools
 - an open-source S3 client for AWS S3 or S3-compatible storage
-- a GUI for MinIO, Cloudflare R2, Wasabi, or DigitalOcean Spaces
+- a GUI for MinIO, Cloudflare R2, Wasabi, STACKIT Object Storage, or DigitalOcean Spaces
 - a developer-focused S3 file manager with editing, search, and transfer visibility
 
 
@@ -39,7 +39,8 @@ Brows3 is a strong fit if you need:
 Traditional S3 tools often suffer from latency when navigating deep folder structures or listing large numbers of objects. If you are comparing tools like an S3 browser, S3 explorer, S3 GUI client, or desktop client for S3-compatible storage, Brows3 focuses the browsing experience around:
 
 - **Fast Cached Navigation**: Recently loaded folders and bucket views are cached so repeat navigation is quick.
-- **Deep Search**: Search recursively within a bucket or prefix, with practical limits to keep large object stores responsive.
+- **Deep Search**: Search recursively across the full selected bucket or prefix instead of only the objects already loaded in the table.
+- **Accurate Large-Bucket Sorting**: Sort large prefixes by name, size, modified date, or storage class with the backend ordering the complete S3 result set before paginating it to the UI.
 - **Prefix-Aware Object Cache**: Brows3 builds folder views from cached object keys, reducing repeated S3 listing calls.
 - **Virtualized Object Table**: The object table is tuned for large listings without rendering every row at once.
 
@@ -49,9 +50,11 @@ Traditional S3 tools often suffer from latency when navigating deep folder struc
 - **Breadcrumb Navigation**: Path-based navigation for rapid traversal of complex hierarchies.
 - **Bulk Operations**: Upload, download, and delete multiple files or recursive folders at once.
 - **S3-Compatible Delete Fallback**: Folder deletion falls back to single-object deletes when a provider rejects multi-object delete requests.
+- **S3-Compatible Upload Compatibility**: Custom S3 endpoints use conservative checksum behavior for better compatibility with providers such as Wasabi and STACKIT Object Storage.
 - **Mixed Content Support**: Seamlessly handle folders and files in a single drag-and-drop operation.
 - **Copy-to-Clipboard**: Quick copy of S3 Paths, Keys, and Object URLs.
 - **Presigned URL Sharing**: Generate temporary object links with configurable expiry directly from the bucket view.
+- **Object Permissions**: View and apply S3 object ACLs for files and recursively for folder prefixes, with clear messages when a bucket or provider has ACLs disabled or unsupported.
 
 ### Rich Previews & Editing
 - **Built-in Editor**: Powered by **Monaco (VS Code's Engine)**. Edit text, JSON, and code files directly in S3.
@@ -67,7 +70,7 @@ Traditional S3 tools often suffer from latency when navigating deep folder struc
   - Sub-millisecond navigation for recently visited folders.
   - **Auto-Invalidation**: Cache automatically refreshes after you upload, delete, or modify files.
   - **30-Minute TTL**: Stale data (from external sources) is automatically purged.
-- **Lazy Loading**: Paginates large object listings to keep browsing responsive.
+- **Lazy Loading**: Paginates large object listings to keep browsing responsive while preserving complete-result sorting for non-default sort orders.
 
 #### **Enterprise & Restricted Access**
 - **Direct Bucket Access**: Instantly navigate to specific buckets (e.g., `s3://my-secure-bucket`) even if you don't have `s3:ListBuckets` permission.
@@ -111,6 +114,7 @@ Brows3 is relevant if you are searching for:
 - MinIO browser
 - Cloudflare R2 desktop client
 - Wasabi browser
+- STACKIT Object Storage browser
 - DigitalOcean Spaces client
 - object storage explorer
 
@@ -134,7 +138,25 @@ Brows3 is focused on fast bucket navigation, deep search, and large-list perform
 | `S3 Browser alternative` | Cross-platform open-source desktop option with Rust/Tauri backend |
 | `MinIO client` | Works for S3-compatible endpoints through Custom S3 mode |
 | `Cloudflare R2 browser` | Relevant when using R2 through S3-compatible credentials |
+| `STACKIT Object Storage browser` | Works through Custom S3 mode using STACKIT's S3-compatible endpoint |
 | `fast S3 desktop client` | Core product focus is speed, caching, and deep recursive search |
+
+## S3-Compatible Provider Setup
+
+Brows3 keeps S3-compatible providers generic: use **Custom S3 / Compatibility Mode** and enter the provider endpoint, region, and access keys supplied by your object-storage account.
+
+### STACKIT Object Storage
+
+Use these values when creating a custom S3-compatible profile for STACKIT Object Storage:
+
+| Field | Value |
+| :--- | :--- |
+| Authentication Method | `Custom S3 / Compatibility Mode` |
+| Endpoint URL | `https://object.storage.eu01.onstackit.cloud` |
+| Default Region | `eu01` |
+| Access Key ID / Secret Access Key | Your STACKIT object-storage credentials |
+
+Brows3 uses path-style requests for custom endpoints, and the STACKIT EU01 endpoint supports path-style buckets. The region field is free-form, so type `eu01` directly even if it is not listed as an AWS region suggestion.
 
 ## GitHub Setup
 
@@ -142,11 +164,11 @@ To improve discoverability inside GitHub itself, set the repository description 
 
 Suggested repository description:
 
-`Fast open-source S3 browser, S3 explorer, and desktop client for Amazon S3, MinIO, Cloudflare R2, Wasabi, and other S3-compatible storage.`
+`Fast open-source S3 browser, S3 explorer, and desktop client for Amazon S3, MinIO, Cloudflare R2, Wasabi, STACKIT Object Storage, and other S3-compatible storage.`
 
 Suggested topics:
 
-`s3`, `amazon-s3`, `s3-browser`, `s3-client`, `s3-explorer`, `object-storage`, `minio`, `cloudflare-r2`, `wasabi`, `digitalocean-spaces`, `tauri`, `rust`
+`s3`, `amazon-s3`, `s3-browser`, `s3-client`, `s3-explorer`, `object-storage`, `minio`, `cloudflare-r2`, `wasabi`, `stackit`, `digitalocean-spaces`, `tauri`, `rust`
 
 ## Installation
 
@@ -159,6 +181,8 @@ Brows3 is available for all major desktop platforms. Download the latest version
 | **Linux** | `.deb`, `.AppImage` for x64 and ARM64 |
 
 Windows releases are configured to bundle the WebView2 runtime with the installer so fresh machines do not depend on a separate runtime download during installation.
+
+Winget manifests are generated from the signed Windows MSI release asset and attached to each GitHub release for package-manager submission. If the MSI asset is unavailable, the release workflow falls back to the NSIS installer manifest.
 
 ### Manual Build
 

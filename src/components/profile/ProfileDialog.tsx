@@ -216,6 +216,8 @@ export default function ProfileDialog({ open, onClose, editProfile }: ProfileDia
   
   const loadProfileToForm = (profile: Profile) => {
     const cred = profile.credential_type;
+    const endpointUrl = cred.type === 'CustomEndpoint' ? cred.endpoint_url : '';
+
     setFormData({
       name: profile.name,
       credentialType: cred.type as CredentialTypeKey,
@@ -223,8 +225,12 @@ export default function ProfileDialog({ open, onClose, editProfile }: ProfileDia
       profileName: cred.type === 'SharedConfig' ? (cred.profile_name || 'default') : 'default',
       accessKeyId: 'access_key_id' in cred ? cred.access_key_id : '',
       secretAccessKey: 'secret_access_key' in cred ? cred.secret_access_key : '',
-      endpointUrl: cred.type === 'CustomEndpoint' ? cred.endpoint_url : '',
+      endpointUrl,
     });
+  };
+
+  const handleCredentialTypeChange = (credentialType: CredentialTypeKey) => {
+    updateField('credentialType', credentialType);
   };
 
   const handleFormCancel = () => {
@@ -594,7 +600,7 @@ export default function ProfileDialog({ open, onClose, editProfile }: ProfileDia
           <Select
             value={formData.credentialType}
             label="Authentication Method"
-            onChange={(e) => updateField('credentialType', e.target.value)}
+            onChange={(e) => handleCredentialTypeChange(e.target.value as CredentialTypeKey)}
             sx={{ borderRadius: 2, fontWeight: 600 }}
           >
             <MenuItem value="Environment">System Environment Variables</MenuItem>

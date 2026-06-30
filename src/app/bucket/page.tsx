@@ -51,6 +51,7 @@ import {
   FolderZip as FolderZipIcon,
   ArrowDropDown as ArrowDropDownIcon,
   Edit as EditIcon,
+  Lock as LockIcon,
 } from '@mui/icons-material';
 import { useObjects } from '@/hooks/useObjects';
 import { operationsApi, transferApi, objectApi, S3Object, copyToClipboard } from '@/lib/tauri';
@@ -59,6 +60,7 @@ import { useTransferStore } from '@/store/transferStore';
 import { useClipboardStore } from '@/store/clipboardStore';
 import { useProfileStore } from '@/store/profileStore';
 import PropertiesDialog from '@/components/dialogs/PropertiesDialog';
+import PermissionsDialog from '@/components/dialogs/PermissionsDialog';
 import ObjectPreviewDialog from '@/components/dialogs/ObjectPreviewDialog';
 import { canObjectBeEdited, getObjectName } from '@/lib/objectCapabilities';
 import PresignedUrlDialog from '@/components/dialogs/PresignedUrlDialog';
@@ -289,6 +291,10 @@ function BucketContent() {
   const [propertiesOpen, setPropertiesOpen] = useState(false);
   const [selectedObjectProp, setSelectedObjectProp] = useState<string | null>(null);
 
+  // Permissions State
+  const [permissionsOpen, setPermissionsOpen] = useState(false);
+  const [selectedObjectPermissions, setSelectedObjectPermissions] = useState<{ key: string; isFolder: boolean } | null>(null);
+
   // Preview/Edit Dialog State
   const [previewOpen, setPreviewOpen] = useState(false);
   const [previewKey, setPreviewKey] = useState<string | null>(null);
@@ -304,6 +310,14 @@ function BucketContent() {
     if (selectedObject) {
        setSelectedObjectProp(selectedObject.key);
        setPropertiesOpen(true);
+    }
+  };
+
+  const handlePermissionsOpen = () => {
+    handleMenuClose();
+    if (selectedObject) {
+      setSelectedObjectPermissions(selectedObject);
+      setPermissionsOpen(true);
     }
   };
 
@@ -1351,6 +1365,10 @@ function BucketContent() {
            <ListItemIcon><InfoIcon fontSize="small" /></ListItemIcon>
            Properties
         </MenuItem>
+        <MenuItem onClick={handlePermissionsOpen}>
+           <ListItemIcon><LockIcon fontSize="small" /></ListItemIcon>
+           Permissions
+        </MenuItem>
         <MenuItem onClick={() => {
           if (selectedObject && bucketName) {
             const name = selectedObject.key.split('/').filter(Boolean).pop() || selectedObject.key;
@@ -1558,6 +1576,15 @@ function BucketContent() {
         bucketName={bucketName} 
         bucketRegion={bucketRegion}
         objectKey={selectedObjectProp || ''} 
+      />
+
+      <PermissionsDialog
+        open={permissionsOpen}
+        onClose={() => setPermissionsOpen(false)}
+        bucketName={bucketName}
+        bucketRegion={bucketRegion}
+        objectKey={selectedObjectPermissions?.key || ''}
+        isFolder={selectedObjectPermissions?.isFolder || false}
       />
 
       {/* Preview/Edit Dialog */}

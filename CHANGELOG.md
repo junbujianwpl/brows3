@@ -5,6 +5,33 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.43] - 2026-06-25
+
+### Added
+- **File and Folder Permissions**: Added a Permissions action for files and folders that reads S3 object ACL grants and applies canned ACLs. Folder permissions apply recursively to objects under the selected prefix.
+- **ACL Compatibility Handling**: Permissions now clearly reports when a bucket or S3-compatible provider does not support ACLs, has Object Ownership ACLs disabled, or denies ACL access.
+
+### Fixed
+- **Large Bucket Sorting**: Sorting by modified date, size, storage class, or reverse name now orders the full S3 prefix before paginating results, so buckets with more than 1000 objects no longer sort only the currently loaded page.
+- **Deep Search Completeness**: Deep search now scans the full selected prefix instead of stopping at cached or arbitrary page limits, and surfaces mid-search S3 errors rather than returning incomplete results.
+- **Windows Paste Duplication**: Fixed duplicated text when pasting credentials into connection forms in the Tauri desktop WebView.
+- **Winget Manifest Reliability**: Winget manifest generation now prefers the MSI installer, falls back to NSIS only when MSI is unavailable, and emits current schema `1.12.0` manifests for release attachments.
+
+## [0.2.42] - 2026-06-14
+
+### Changed
+- **Generic S3-Compatible Setup**: Removed the STACKIT-specific provider preset from the profile dialog so custom endpoints remain provider-neutral.
+- **STACKIT Documentation**: Added README setup instructions for using STACKIT Object Storage through Custom S3 / Compatibility Mode with endpoint `https://object.storage.eu01.onstackit.cloud` and region `eu01`.
+
+## [0.2.41] - 2026-06-14
+
+### Added
+- **STACKIT Object Storage Preset**: Added STACKIT Object Storage EU01 as a built-in S3-compatible profile preset using `https://object.storage.eu01.onstackit.cloud` and region `eu01`.
+- **Winget Manifest Generation**: Releases now attach winget manifest YAML generated from the actual Windows installer URL and SHA256 digest.
+
+### Fixed
+- **Wasabi Upload Compatibility**: Custom S3-compatible endpoints now only request payload checksums when required, avoiding optional checksum/trailer behavior that can stall or fail uploads on Wasabi and similar providers.
+
 ## [0.2.40] - 2026-06-02
 
 ### Added
