@@ -23,12 +23,35 @@ export const getFileExtension = (name: string): string => {
   return i > 0 ? name.slice(i + 1).toLowerCase() : '';
 };
 
+const pad2 = (n: number) => String(n).padStart(2, '0');
+
 /**
- * Format date for display
- * @param dateString - ISO date string or null
- * @returns Formatted date string or placeholder
+ * Date without zero-padding: yy/M/d
  */
-export const formatDate = (dateString: string | null): string => {
-  if (!dateString) return '—';
-  return new Date(dateString).toLocaleDateString();
+export const formatDate = (input: string | number | null): string => {
+  if (input == null) return '—';
+  const d = new Date(input);
+  if (isNaN(d.getTime())) return '—';
+  return `${d.getFullYear() % 100}/${d.getMonth() + 1}/${d.getDate()}`;
+};
+
+/**
+ * Time with zero-padding: HH:mm
+ */
+export const formatTime = (input: string | number | null): string => {
+  if (input == null) return '—';
+  const d = new Date(input);
+  if (isNaN(d.getTime())) return '—';
+  return `${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
+};
+
+/**
+ * Date (no pad) + Time (padded): yy/M/d HH:mm
+ */
+export const formatDateTime = (input: string | number | null): string => {
+  if (input == null) return '—';
+  const d = new Date(input);
+  if (isNaN(d.getTime())) return '—';
+  const y = d.getFullYear() % 100;
+  return `${y}/${d.getMonth() + 1}/${d.getDate()} ${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
 };

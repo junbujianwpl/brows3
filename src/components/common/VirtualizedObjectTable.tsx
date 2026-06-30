@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import { memo, useMemo, useCallback, useRef } from 'react';
 import type { CSSProperties, HTMLAttributes } from 'react';
@@ -50,9 +50,10 @@ function formatSmartDate(iso: string): string {
   const d = new Date(iso);
   if (isNaN(d.getTime())) return '—';
 
-  // Unified format: yy/M/d H:m (no zero padding)
   const y = d.getFullYear() % 100;
-  const result = `${y}/${d.getMonth() + 1}/${d.getDate()} ${d.getHours()}:${d.getMinutes()}`;
+  const H = String(d.getHours()).padStart(2, '0');
+  const M = String(d.getMinutes()).padStart(2, '0');
+  const result = `${y}/${d.getMonth() + 1}/${d.getDate()} ${H}:${M}`;
 
   if (_dateFormatCache.size >= DATE_CACHE_MAX) _dateFormatCache.clear();
   _dateFormatCache.set(iso, result);

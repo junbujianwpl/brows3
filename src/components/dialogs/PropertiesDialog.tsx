@@ -18,7 +18,7 @@ import {
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { operationsApi, ObjectMetadata } from '@/lib/tauri';
 import { BaseDialog } from '../common/BaseDialog';
-import { formatSize } from '@/lib/utils';
+import { formatSize, formatDateTime } from '@/lib/utils';
 
 interface PropertiesDialogProps {
   open: boolean;
@@ -150,7 +150,7 @@ export default function PropertiesDialog({ open, onClose, bucketName, bucketRegi
                             </TableRow>
                             <TableRow sx={{ '&:last-child td': { border: 0 } }}>
                                 <TableCell sx={{ fontWeight: 700, color: 'text.secondary' }}>Modified</TableCell>
-                                <TableCell sx={{ fontWeight: 600 }}>{metadata.last_modified}</TableCell>
+                                <TableCell sx={{ fontWeight: 600 }}>{formatDateTime(metadata.last_modified)}</TableCell>
                             </TableRow>
                             <TableRow sx={{ '&:last-child td': { border: 0 } }}>
                                 <TableCell sx={{ fontWeight: 700, color: 'text.secondary' }}>ETag (MD5)</TableCell>

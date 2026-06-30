@@ -35,6 +35,7 @@ import { useBuckets } from '@/hooks/useBuckets';
 import { useHistoryStore } from '@/store/historyStore';
 import { useAppStore } from '@/store/appStore';
 import { toast } from '@/store/toastStore';
+import { formatDate } from '@/lib/utils';
 
 function HomeContent() {
   const router = useRouter();
@@ -272,7 +273,7 @@ function HomeContent() {
                 />
               </TableCell>
               <TableCell sx={{ color: 'text.secondary', fontSize: '0.875rem' }}>
-                {bucket.creation_date ? new Date(bucket.creation_date).toLocaleDateString() : '—'}
+                {bucket.creation_date ? formatDate(bucket.creation_date) : '—'}
               </TableCell>
               <TableCell align="right" sx={{ color: 'text.secondary', fontFamily: 'monospace', fontSize: '0.875rem' }}>
                   {bucket.total_size_formatted || '—'}

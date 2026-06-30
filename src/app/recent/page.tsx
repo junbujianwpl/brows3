@@ -22,6 +22,7 @@ import {
 import { useHistoryStore, RecentItem } from '@/store/historyStore';
 import { useAppStore } from '@/store/appStore';
 import { useProfileStore } from '@/store/profileStore';
+import { formatDate } from '@/lib/utils';
 
 export default function RecentPage() {
   const router = useRouter();
@@ -62,7 +63,7 @@ export default function RecentPage() {
     if (diff < 60000) return 'Just now';
     if (diff < 3600000) return `${Math.floor(diff / 60000)} min ago`;
     if (diff < 86400000) return `${Math.floor(diff / 3600000)} hours ago`;
-    return new Date(timestamp).toLocaleDateString();
+    return formatDate(timestamp);
   };
 
   return (

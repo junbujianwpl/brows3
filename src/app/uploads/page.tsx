@@ -35,6 +35,7 @@ import {
 
 import { useTransferStore } from '@/store/transferStore';
 import { TransferJob } from '@/lib/tauri';
+import { formatDate, formatTime, formatDateTime } from '@/lib/utils';
 
 type StatusColor = NonNullable<ChipProps['color']>;
 type ProgressColor = NonNullable<LinearProgressProps['color']>;
@@ -326,18 +327,18 @@ function SingleRow({ job, isNested = false }: { job: TransferJob; isNested?: boo
             </TableCell>
             <TableCell>
                 <Typography variant="caption" sx={{ display: 'block', lineHeight: 1.2 }}>
-                   {new Date(job.created_at).toLocaleDateString()}
+                   {formatDate(job.created_at)}
                    <br/>
-                   <Box component="span" color="text.secondary">{new Date(job.created_at).toLocaleTimeString()}</Box>
+                   <Box component="span" color="text.secondary">{formatTime(job.created_at)}</Box>
                 </Typography>
             </TableCell>
             <TableCell>
                 <Typography variant="caption" sx={{ display: 'block', lineHeight: 1.2 }}>
                    {job.finished_at ? (
                        <>
-                           {new Date(job.finished_at).toLocaleDateString()}
+                           {formatDate(job.finished_at)}
                            <br/>
-                           <Box component="span" color="text.secondary">{new Date(job.finished_at).toLocaleTimeString()}</Box>
+                           <Box component="span" color="text.secondary">{formatTime(job.finished_at)}</Box>
                        </>
                    ) : '—'}
                 </Typography>
@@ -413,8 +414,8 @@ function GroupRow({ group }: { group: TransferGroupRow }) {
     const endTimes = items.map(j => j.finished_at || 0).filter((t) => t > 0);
     const endTime = isAllTerminal && endTimes.length > 0 ? Math.max(...endTimes) : 0;
     
-    const startDateStr = startTime > 0 ? new Date(startTime).toLocaleString() : '—';
-    const finishedDateStr = endTime > 0 ? new Date(endTime).toLocaleString() : '—';
+    const startDateStr = startTime > 0 ? formatDateTime(startTime) : '—';
+    const finishedDateStr = endTime > 0 ? formatDateTime(endTime) : '—';
     const elapsedStr = endTime > 0 ? formatDuration(endTime - startTime) : (activeCount > 0 ? 'In Progress' : '—');
     
     let statusLabel = 'Completed';

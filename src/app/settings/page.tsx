@@ -38,6 +38,7 @@ import { invalidateBucketCache } from '@/hooks/useBuckets';
 import { clearLargeDirCache, getLargeDirCacheStats } from '@/hooks/useObjects';
 import { toast } from '@/store/toastStore';
 import { copyToClipboard, invalidateCache, isTauri, logApi, type LogFileInfo } from '@/lib/tauri';
+import { formatTime } from '@/lib/utils';
 
 export default function SettingsPage() {
   // Theme is controlled by appStore (used by the actual app)
@@ -422,7 +423,7 @@ function SystemMonitor() {
                                     <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
                                         <Typography variant="body2" component="span" sx={{ fontFamily: 'monospace' }}>{log.message}</Typography>
                                         <Typography variant="caption" color="text.secondary">
-                                            {new Date(log.timestamp).toLocaleTimeString()}
+                                            {formatTime(log.timestamp)}
                                         </Typography>
                                     </Box>
                                 }
